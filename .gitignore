@@ -27,3 +27,4 @@ sql/inserts*
 .vscode/
 .dockerignore
 /gom
+sql/dev/*

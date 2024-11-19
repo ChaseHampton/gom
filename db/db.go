@@ -12,9 +12,11 @@ import (
 
 var (
 	DBPool      *pgxpool.Pool
-	currentUser string
-	once        sync.Once
+	CurrentUser string
+	O           sync.Once
 )
+
+var CurrentFunc = user.Current
 
 func Connect(connStr string) {
 	var err error
@@ -30,13 +32,13 @@ func Close() {
 }
 
 func GetCurrentUser() string {
-	once.Do(func() {
-		cUser, err := user.Current()
+	O.Do(func() {
+		cUser, err := CurrentFunc()
 		if err != nil {
-			currentUser = "unknown"
+			CurrentUser = "unknown"
 		} else {
-			currentUser = cUser.Username
+			CurrentUser = cUser.Username
 		}
 	})
-	return currentUser
+	return CurrentUser
 }

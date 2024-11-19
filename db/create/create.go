@@ -9,6 +9,13 @@ import (
 	"github.com/chasehampton/gom/models"
 )
 
+type LogInserter interface {
+	InsertLogEntry(ctx context.Context, entry models.LogEntry) error
+}
+
+type InserterImpl struct {
+}
+
 func InsertProject(ctx context.Context, project models.Project) error {
 	query := "call usp_insert_project($1, $2, $3, $4)"
 	_, err := db.DBPool.Exec(ctx, query, project.Name, project.Description, time.Now(), db.GetCurrentUser())
@@ -40,8 +47,8 @@ func InsertProtocol(ctx context.Context, protocol models.Protocol) error {
 }
 
 func InsertAction(ctx context.Context, action models.Action) error {
-	query := "call usp_insert_action($1, $2, $3, $4, $5, $6, $7)"
-	_, err := db.DBPool.Exec(ctx, query, action.LocalPath, action.RemotePath, action.Bucket, action.Connection.ConnectionID, action.Project.ProjectID, time.Now(), db.GetCurrentUser())
+	query := "call usp_insert_action($1, $2, $3, $4, $5, $6, $7, $8)"
+	_, err := db.DBPool.Exec(ctx, query, action.LocalPath, action.RemotePath, action.Bucket, action.IsUpload, action.Connection.ConnectionID, action.Project.ProjectID, time.Now(), db.GetCurrentUser())
 	if err != nil {
 		log.Printf("Error inserting action: %v\n", err)
 		return err
@@ -60,8 +67,8 @@ func InsertConnectionConfig(ctx context.Context, config models.ConnectionConfig,
 }
 
 func InsertAuthData(ctx context.Context, auth models.AuthDetail) error {
-	query := "call usp_insert_auth_detail($1, $2, $3, $4, $5, $6, $7, $8)"
-	_, err := db.DBPool.Exec(ctx, query, auth.Description, auth.Username, auth.Password, auth.PrivateKey, auth.AccessKey, auth.SecretKey, time.Now(), db.GetCurrentUser())
+	query := "call usp_insert_auth_detail($1, $2, $3, $4)"
+	_, err := db.DBPool.Exec(ctx, query, auth.Description, auth.VaultPath, time.Now(), db.GetCurrentUser())
 	if err != nil {
 		log.Printf("Error inserting auth data: %v\n", err)
 		return err
@@ -87,4 +94,18 @@ func InsertScheduleAction(ctx context.Context, scheduleAction models.ScheduleAct
 		return err
 	}
 	return nil
+}
+
+func InsertLogEntry(ctx context.Context, logEntry models.LogEntry) error {
+	query := "call usp_insert_log_entry($1, $2, $3, $4, $5)"
+	_, err := db.DBPool.Exec(ctx, query, logEntry.Message, logEntry.StackTrace, logEntry.ActionID, logEntry.Additional)
+	if err != nil {
+		log.Printf("Error inserting log entry: %v\n", err)
+		return err
+	}
+	return nil
+}
+
+func (i *InserterImpl) InsertLogEntry(ctx context.Context, entry models.LogEntry) error {
+	return InsertLogEntry(ctx, entry)
 }

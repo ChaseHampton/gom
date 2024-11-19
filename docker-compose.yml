@@ -12,6 +12,19 @@ services:
       - pg_data:/var/lib/postgresql/data
       - ./sql:/docker-entrypoint-initdb.d:ro
 
+  vault:
+    image: hashicorp/vault
+    container_name: vault
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "8200:8200"
+    volumes:
+      - vault_data:/vault/file
+    command: server -dev -dev-root-token-id=${VAULT_DEV_ROOT_TOKEN_ID}
+
 volumes:
   pg_data:
+    driver: local
+  vault_data:
     driver: local

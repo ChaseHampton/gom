@@ -3,14 +3,19 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/chasehampton/gom/db"
+	"github.com/chasehampton/gom/db/create"
 	"github.com/chasehampton/gom/db/read"
 	"github.com/chasehampton/gom/handlers"
+	"github.com/chasehampton/gom/logger"
+	"github.com/chasehampton/gom/models"
+	"github.com/chasehampton/gom/runner"
+	"github.com/chasehampton/gom/vaultclient"
 	"github.com/joho/godotenv"
 )
 
@@ -36,24 +41,36 @@ func main() {
 	db.Connect(connStr)
 	defer db.Close()
 
+	l := logger.NewLogger(&create.InserterImpl{})
+
 	schedule, err := read.GetSchedule(context.Background(), *schedule_id)
 	if err != nil {
 		log.Fatalf("Error getting schedule: %v\n", err)
 	}
 
-	bhandler := handlers.GetBaseHandler()
+	var wg sync.WaitGroup
+
 	for _, s := range schedule {
+		if s.Actions == nil {
+			log.Printf("No actions found for schedule: %v\n", s.ScheduleID)
+			continue
+		}
+		vc, err := vaultclient.NewVaultClient(os.Getenv("VAULT_ADDR"), os.Getenv("VAULT_DEV_ROOT_TOKEN_ID"))
+		if err != nil {
+			log.Printf("Error creating vault client: %v\n", err)
+		}
+		bh := handlers.GetBaseHandler(vc, l)
 		for _, a := range s.Actions {
-			if !a.LocalPath.Valid {
-				log.Printf("Local path is not valid for action: %v\n", a.ActionID)
-			}
-			files, err := bhandler.GetUploadFiles(a.LocalPath.String)
-			if err != nil {
-				log.Fatalf("Error getting files: %v\n", err)
-			}
-			for _, f := range files {
-				fmt.Println(f.Name())
-			}
+			wg.Add(1)
+			go func(act models.Action) {
+				defer wg.Done()
+				log.Printf("Action: %v\n", act)
+				err := runner.Run(act, bh)
+				if err != nil {
+					log.Printf("Error running action: %v\n", err)
+				}
+			}(a)
 		}
 	}
+	wg.Wait()
 }

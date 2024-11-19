@@ -27,6 +27,7 @@ CREATE TABLE "actions" (
   "local_path" text,
   "remote_path" text,
   "bucket" text,
+  "is_upload" bool,
   "connection_id" int,
   "project_id" int,
   "date_added" timestamptz,
@@ -42,17 +43,14 @@ CREATE TABLE "connection_config" (
   "added_by" text
 );
 
-CREATE TABLE "auth_details" (
-  "auth_id" int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  "description" text,
-  "username" text,
-  "password" text,
-  "private_key" text,
-  "access_key" text,
-  "secret_key" text,
-  "date_added" timestamptz,
-  "added_by" text
+CREATE TABLE auth_details (
+    "auth_id" int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "description" TEXT,
+    "vault_path" TEXT,
+    "date_added" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "added_by" TEXT
 );
+
 
 CREATE TABLE "schedule" (
   "schedule_id" int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -65,6 +63,16 @@ CREATE TABLE "schedule_actions" (
   "schedule_id" int,
   "action_id" int
 );
+
+CREATE TABLE logs (
+    "id" int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "timestamp" TIMESTAMPTZ NOT NULL,
+    "message" TEXT NOT NULL,
+    "stack_trace" TEXT,
+    "action_id" INT,
+    "additional_info" TEXT
+);
+
 
 ALTER TABLE "schedule_actions" ADD CONSTRAINT "pk_schedule_actions" PRIMARY KEY ("schedule_id", "action_id");
 
@@ -127,14 +135,15 @@ CREATE OR REPLACE PROCEDURE usp_insert_action(
     p_local_path TEXT,
     p_remote_path TEXT,
     p_bucket TEXT,
+    p_is_upload bool,
     p_connection_id INT,
     p_project_id INT,
     p_date_added TIMESTAMPTZ DEFAULT Now(),
     p_added_by TEXT DEFAULT CURRENT_USER
 ) AS $$
 BEGIN
-    INSERT INTO public.actions (local_path, remote_path, bucket, connection_id, project_id, date_added, added_by)
-    VALUES (p_local_path, p_remote_path, p_bucket, p_connection_id, p_project_id, p_date_added, p_added_by);
+    INSERT INTO public.actions (local_path, remote_path, bucket, is_upload, connection_id, project_id, date_added, added_by)
+    VALUES (p_local_path, p_remote_path, p_bucket, p_is_upload, p_connection_id, p_project_id, p_date_added, p_added_by);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -152,20 +161,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Procedure for inserting into auth_details
 CREATE OR REPLACE PROCEDURE usp_insert_auth_detail(
     p_description TEXT,
-    p_username TEXT,
-    p_password TEXT DEFAULT NULL,
-    p_private_key TEXT DEFAULT NULL,
-    p_access_key TEXT DEFAULT NULL,
-    p_secret_key TEXT DEFAULT NULL,
+    p_vault_path TEXT,
     p_date_added TIMESTAMPTZ DEFAULT Now(),
     p_added_by TEXT DEFAULT CURRENT_USER
 ) AS $$
 BEGIN
-    INSERT INTO public.auth_details (description, username, password, private_key, access_key, secret_key, date_added, added_by)
-    VALUES (p_description, p_username, p_password, p_private_key, p_access_key, p_secret_key, p_date_added, p_added_by);
+    INSERT INTO public.auth_details (description, vault_path, date_added, added_by)
+    VALUES (p_description, p_vault_path, p_date_added, p_added_by);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -192,3 +196,93 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- DROP FUNCTION public.usp_collect_schedule_actions(int4);
+
+CREATE OR REPLACE FUNCTION public.usp_collect_schedule_actions(schedule_id_input integer)
+ RETURNS TABLE(
+    schedule_id integer, 
+    schedule_description text, 
+    schedule_date_added timestamp with time zone, 
+    schedule_added_by text, 
+    project_id integer, 
+    project_name text, 
+    project_description text, 
+    project_date_added timestamp with time zone, 
+    project_added_by text, 
+    action_id integer, 
+    action_local_path text, 
+    action_remote_path text, 
+    action_bucket text, 
+    action_upload bool,
+    action_date_added timestamp with time zone, 
+    action_added_by text, 
+    connection_id integer, 
+    connection_date_added timestamp with time zone, 
+    connection_added_by text, 
+    protocol_id integer, 
+    protocol_name text, 
+    protocol_description text, 
+    protocol_date_added timestamp with time zone, 
+    protocol_added_by text, 
+    config_id integer, 
+    config_key text, 
+    config_value text, 
+    config_date_added timestamp with time zone, 
+    config_added_by text, 
+    auth_id integer, 
+    auth_description text, 
+    auth_vault_path text, 
+    auth_date_added timestamp with time zone, 
+    auth_added_by text
+)
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        s.schedule_id,
+        s.description,
+        s.date_added,
+        s.added_by,
+        p.project_id,
+        p.name,
+        p.description,
+        p.date_added,
+        p.added_by,
+        a.action_id,
+        a.local_path,
+        a.remote_path,
+        a.bucket,
+		a.is_upload,
+        a.date_added,
+        a.added_by,
+        c.connection_id,
+        c.date_added,
+        c.added_by,
+        pr.protocol_id,
+        pr.name,
+        pr.description,
+        pr.date_added,
+        pr.added_by,
+        cc.config_id,
+        cc.key,
+        cc.value,
+        cc.date_added,
+        cc.added_by,
+        ad.auth_id,
+        ad.description,
+        ad.vault_path,
+        ad.date_added,
+        ad.added_by
+    FROM schedule s
+    JOIN schedule_actions sa ON s.schedule_id = sa.schedule_id
+    JOIN actions a ON sa.action_id = a.action_id
+    JOIN projects p ON a.project_id = p.project_id
+    JOIN connections c ON a.connection_id = c.connection_id
+    JOIN protocols pr ON c.protocol_id = pr.protocol_id
+    JOIN auth_details ad ON c.auth_id = ad.auth_id
+    LEFT JOIN connection_config cc ON c.connection_id = cc.connection_id
+    WHERE s.schedule_id = schedule_id_input;
+END;
+$function$
+;

@@ -39,6 +39,7 @@ type Action struct {
 	LocalPath  sql.NullString `db:"local_path" json:"localPath"`
 	RemotePath sql.NullString `db:"remote_path" json:"remotePath"`
 	Bucket     sql.NullString `db:"bucket" json:"bucket"`
+	IsUpload   sql.NullBool   `db:"is_upload" json:"isUpload"`
 	Connection Connection     `db:"connection_id" json:"connection_id"`
 	Project    Project        `db:"project_id" json:"project_id"`
 	DateAdded  time.Time      `db:"date_added" json:"dateAdded"`
@@ -58,11 +59,7 @@ type ConnectionConfig struct {
 type AuthDetail struct {
 	AuthID      int            `db:"auth_id" json:"auth_id"`
 	Description sql.NullString `db:"description" json:"description"`
-	Username    sql.NullString `db:"username" json:"username"`
-	Password    sql.NullString `db:"password" json:"password"`
-	PrivateKey  sql.NullString `db:"private_key" json:"privateKey"`
-	AccessKey   sql.NullString `db:"access_key" json:"accessKey"`
-	SecretKey   sql.NullString `db:"secret_key" json:"secretKey"`
+	VaultPath   sql.NullString `db:"vault_path" json:"vaultPath"`
 	DateAdded   time.Time      `db:"date_added" json:"dateAdded"`
 	AddedBy     sql.NullString `db:"added_by" json:"addedBy"`
 }
@@ -81,4 +78,13 @@ type Schedule struct {
 type ScheduleAction struct {
 	ScheduleID int `db:"schedule_id" json:"schedule_id"`
 	ActionID   int `db:"action_id" json:"action_id"`
+}
+
+type LogEntry struct {
+	Timestamp  time.Time
+	Message    string
+	StackTrace string
+	ScheduleID int
+	ActionID   int
+	Additional string
 }

@@ -41,6 +41,7 @@ func GetSchedule(ctx context.Context, scheduleID int) ([]models.Schedule, error)
 			&a.LocalPath,
 			&a.RemotePath,
 			&a.Bucket,
+			&a.IsUpload,
 			&a.DateAdded,
 			&a.AddedBy,
 			&c.ConnectionID,
@@ -58,7 +59,7 @@ func GetSchedule(ctx context.Context, scheduleID int) ([]models.Schedule, error)
 			&cc.AddedBy,
 			&ad.AuthID,
 			&ad.Description,
-			&ad.Username,
+			&ad.VaultPath,
 			&ad.DateAdded,
 			&ad.AddedBy,
 		)
@@ -76,14 +77,14 @@ func GetSchedule(ctx context.Context, scheduleID int) ([]models.Schedule, error)
 			existSched.Actions = append(existSched.Actions, a)
 		} else {
 			a.Project = p
-			a.Connection = c
+			c.AuthDetail = ad
 			c.Protocol = pr
 			if cc.ConfigID.Valid {
 				c.Configs = []models.ConnectionConfig{cc}
 			} else {
 				c.Configs = []models.ConnectionConfig{} // Create an empty slice
 			}
-			c.AuthDetail = ad
+			a.Connection = c
 			s.Actions = []models.Action{a}
 			schedulesMap[s.ScheduleID] = &s
 		}
